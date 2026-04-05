@@ -1,21 +1,25 @@
 import { Server, Socket } from "socket.io";
 import { PROXIMITY_RADIUS, ACTIVE_PAIRS_KEY, PLAYER_KEY } from "../config/config.ts";
 import { redis } from "../redis/index.ts";
-import { pairKey } from "./data.ts";
+import { pairKey, buildMemberString } from "./data.ts";
 
 export async function checkProximity(socket: Socket, io: Server) {
-    const mePositions = await redis.geopos(PLAYER_KEY, socket.id);
+    const username = socket.data.username;
+    if (!username) return;
+
+    const memberString = buildMemberString(socket.id, username);
+    const mePositions = await redis.geopos(PLAYER_KEY, memberString);
     if (!mePositions || !mePositions[0]) return;
     
     // geosearch returns members within the radius.
     // Assuming PROXIMITY_RADIUS is mapped 1:1 roughly to meters due to geo scale.
-    const nearbyMembers = await redis.geosearch(
+    const nearbyMembersString = await redis.geosearch(
         PLAYER_KEY,
-        "FROMMEMBER", socket.id,
+        "FROMMEMBER", memberString,
         "BYRADIUS", PROXIMITY_RADIUS, "m"
     ) as string[];
 
-    const currentlyNear = new Set(nearbyMembers);
+    const currentlyNear = new Set(nearbyMembersString.map(m => m.split(':')[0] as string));
     currentlyNear.delete(socket.id); // remove self
 
     // Get all active pairs from redis to see who was near
@@ -25,7 +29,7 @@ export async function checkProximity(socket: Socket, io: Server) {
 
     // 1. For anyone currently near but NOT previously near -> Connect
     for (const otherId of currentlyNear) {
-        if (!previouslyNear.has(otherId)) {
+        if (!previouslyNear.has(otherId) && otherId) {
             const key = pairKey(socket.id, otherId);
             const roomId = `room:${key}`;
             
@@ -50,7 +54,7 @@ export async function checkProximity(socket: Socket, io: Server) {
 
     // 2. For anyone previously near but NOT currently near -> Disconnect
     for (const otherId of previouslyNear) {
-        if (!currentlyNear.has(otherId)) {
+        if (!currentlyNear.has(otherId) && otherId) {
             const key = pairKey(socket.id, otherId);
             const roomId = `room:${key}`;
 
@@ -78,6 +82,7 @@ export async function deletePlayerFromProximity(socket: Socket, io: Server) {
     const previouslyNearArr = await redis.smembers(ACTIVE_NEAR_KEY);
     
     for (const otherId of previouslyNearArr) {
+        if (!otherId) continue;
         const key = pairKey(socket.id, otherId);
         const roomId = `room:${key}`;
         
@@ -90,4 +95,5 @@ export async function deletePlayerFromProximity(socket: Socket, io: Server) {
     }
     
     await redis.del(ACTIVE_NEAR_KEY);
-}
+}
+

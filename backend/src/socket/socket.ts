@@ -1,5 +1,5 @@
 import { Server, Socket } from "socket.io";
-import { addPlayer, removePlayer, updatePlayerPosition, getAllPlayers, getPlayer } from "../data/data.ts";
+import { addPlayer, removePlayer, updatePlayerPosition, getAllPlayers } from "../data/data.ts";
 import type { PlayerData, MoveData } from "../types/player.ts";
 import { checkProximity, deletePlayerFromProximity } from "../data/proximity.ts";
 
@@ -8,6 +8,8 @@ export default function setupSocket(io: Server) {
         console.log('A user connected:', socket.id);
 
         socket.on('player:join', async ({ username, x, y }: Omit<PlayerData, 'id'>) => {
+            socket.data.username = username;
+
             const newPlayer: PlayerData = {
                 id: socket.id,
                 username,
@@ -28,10 +30,9 @@ export default function setupSocket(io: Server) {
         });
 
         socket.on('player:move', async ({ x, y }: Omit<MoveData, 'id'>) => {
-            const player = await getPlayer(socket.id);
-            if (player) {
+            if (socket.data.username) {
                 // update position in redis
-                await updatePlayerPosition(socket.id, x, y);
+                await updatePlayerPosition(socket.id, socket.data.username, x, y);
 
                 // check proximity
                 await checkProximity(socket, io);
@@ -47,10 +48,9 @@ export default function setupSocket(io: Server) {
 
         socket.on('disconnect', async () => {
             console.log('A user disconnected:', socket.id);
-            const player = await getPlayer(socket.id);
-            if (player) {
+            if (socket.data.username) {
                 await deletePlayerFromProximity(socket, io);
-                await removePlayer(socket.id);
+                await removePlayer(socket.id, socket.data.username);
                 socket.broadcast.emit('player:left', { id: socket.id });
             }
         });
