@@ -1,6 +1,7 @@
 import { Server, Socket } from "socket.io";
 import { players, addPlayer, removePlayer } from "../data/data.ts";
 import type { PlayerData, MoveData } from "../types/player.ts";
+import { checkProximity, deletePlayerFromProximity } from "../data/proximity.ts";
 
 export default function setupSocket(io: Server) {
     io.on('connection', (socket: Socket) => {
@@ -30,15 +31,23 @@ export default function setupSocket(io: Server) {
             if (player) {
                 player.x = x;
                 player.y = y;
-                
+
+                // check proximity
+                checkProximity(socket, io);
+
                 // broadcast to others
                 socket.broadcast.emit('player:moved', { id: socket.id, x, y });
             }
         });
 
+        socket.on('chat:message', ({ roomId, message }: { roomId: string, message: string }) => {
+            socket.to(roomId).emit('chat:message', { senderId: socket.id, message });
+        });
+
         socket.on('disconnect', () => {
             console.log('A user disconnected:', socket.id);
             if (players.has(socket.id)) {
+                deletePlayerFromProximity(socket, io);
                 removePlayer(socket.id);
                 socket.broadcast.emit('player:left', { id: socket.id });
             }

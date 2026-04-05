@@ -1,6 +1,6 @@
 import { Application, Graphics, Container, Text, Ticker } from 'pixi.js'
 import type { Position, AvatarObject, MoveCallback, ProximityCallback } from '../types/gameTypes'
-import { WORLD_BOUND, WORLD_SIZE, GRID_STEP, PLAYER_SPEED, ROOM_ZONES } from '../constants/gameConstants'
+import { WORLD_BOUND, WORLD_SIZE, GRID_STEP, PLAYER_SPEED, ROOM_ZONES, PROXIMITY_RADIUS } from '../constants/gameConstants'
 import { pickColor } from './gameHelper'
 
 export class CosmosGame {
@@ -16,7 +16,7 @@ export class CosmosGame {
   private _isInitialized = false;
 
   position:         Position = { x: 0, y: 0 }
-  PROXIMITY_RADIUS: number   = 100
+  PROXIMITY_RADIUS: number   = PROXIMITY_RADIUS
   SPEED:            number   = PLAYER_SPEED
 
   /** Fires every frame the local player moves — wire to socket.emit */

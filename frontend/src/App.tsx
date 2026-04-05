@@ -2,12 +2,14 @@ import { useState, useCallback } from 'react'
 import type { CSSProperties } from 'react'
 import LoginScreen from './components/LoginScreen'
 import GameCanvas from './components/GameCanvas'
+import ChatRoom from './components/ChatRoom'
 import { CosmosGame } from '../game/CosmosGame'
 import { socket } from '../lib/socket'
 import type { PlayerData, MoveData } from '../types/player'
 
 export default function App() {
   const [username, setUsername] = useState<string | null>(null)
+  const [proximityState, setProximityState] = useState<{ roomId: string, otherUserId: string } | null>(null)
 
   const handleGameReady = useCallback((game: CosmosGame): void => {
     console.log('PixiJS ready — game instance:', game)
@@ -36,6 +38,13 @@ export default function App() {
       game.removePlayer(id)
     })
 
+    socket.on('proximity:connect', (data: { userId: string, roomId: string }) => {
+      setProximityState({ roomId: data.roomId, otherUserId: data.userId })
+    })
+
+    socket.on('proximity:disconnect', () => {
+      setProximityState(null)
+    })
 
   }, [username])
 
@@ -46,6 +55,10 @@ export default function App() {
   return (
     <div style={{ width: '100vw', height: '100vh', overflow: 'hidden' }}>
       <GameCanvas username={username} onReady={handleGameReady} />
+
+      {proximityState && (
+        <ChatRoom roomId={proximityState.roomId} otherUserId={proximityState.otherUserId} />
+      )}
 
       {/* HUD — extend with chat panel, online count, etc. */}
       <div style={hudStyle}>

@@ -1,0 +1,1 @@
+export const PROXIMITY_RADIUS = 130
