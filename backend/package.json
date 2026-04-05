@@ -19,6 +19,7 @@
     "@types/mongoose": "^5.11.96",
     "cors": "^2.8.6",
     "express": "^5.2.1",
+    "ioredis": "^5.10.1",
     "mongoose": "^9.4.1",
     "socket.io": "^4.8.3"
   }

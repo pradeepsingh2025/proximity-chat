@@ -4,32 +4,32 @@ import { WORLD_BOUND, WORLD_SIZE, GRID_STEP, PLAYER_SPEED, ROOM_ZONES, PROXIMITY
 import { pickColor } from './gameHelper'
 
 export class CosmosGame {
-  private app!:          Application
-  private world!:        Container
-  private myAvatar!:     AvatarObject
+  private app!: Application
+  private world!: Container
+  private myAvatar!: AvatarObject
   private proximityRing!: Graphics
 
   private otherPlayers = new Map<string, AvatarObject>()
-  private keys:         Record<string, boolean> = {}
+  private keys: Record<string, boolean> = {}
 
   private _isDestroyed = false;
   private _isInitialized = false;
 
-  position:         Position = { x: 0, y: 0 }
-  PROXIMITY_RADIUS: number   = PROXIMITY_RADIUS
-  SPEED:            number   = PLAYER_SPEED
+  position: Position = { x: 0, y: 0 }
+  PROXIMITY_RADIUS: number = PROXIMITY_RADIUS
+  SPEED: number = PLAYER_SPEED
 
   /** Fires every frame the local player moves — wire to socket.emit */
-  onMove?:      MoveCallback
+  onMove?: MoveCallback
   /** Fires each tick with the array of nearby player IDs */
   onProximity?: ProximityCallback
 
   private readonly _keydown: (e: KeyboardEvent) => void
-  private readonly _keyup:   (e: KeyboardEvent) => void
+  private readonly _keyup: (e: KeyboardEvent) => void
 
   constructor() {
     this._keydown = this._onKeyDown.bind(this)
-    this._keyup   = this._onKeyUp.bind(this)
+    this._keyup = this._onKeyUp.bind(this)
   }
 
   // ─── Init ──────────────────────────────────────────────────────────────────
@@ -38,10 +38,10 @@ export class CosmosGame {
     this.app = new Application()
 
     await this.app.init({
-      resizeTo:    mountEl,
-      background:  0x0c1117,
-      antialias:   true,
-      resolution:  window.devicePixelRatio || 1,
+      resizeTo: mountEl,
+      background: 0x0c1117,
+      antialias: true,
+      resolution: window.devicePixelRatio || 1,
       autoDensity: true,
     })
 
@@ -55,7 +55,7 @@ export class CosmosGame {
     this._isInitialized = true;
 
     mountEl.appendChild(this.app.canvas as HTMLCanvasElement)
-    ;(this.app.canvas as HTMLCanvasElement).style.display = 'block'
+      ; (this.app.canvas as HTMLCanvasElement).style.display = 'block'
 
     this.world = new Container()
     this.app.stage.addChild(this.world)
@@ -66,7 +66,7 @@ export class CosmosGame {
     this.world.addChild(this.myAvatar.container)
 
     window.addEventListener('keydown', this._keydown)
-    window.addEventListener('keyup',   this._keyup)
+    window.addEventListener('keyup', this._keyup)
     this.app.ticker.add(this._tick.bind(this))
   }
 
@@ -102,11 +102,11 @@ export class CosmosGame {
       g.stroke({ color: z.color, width: 1, alpha: 0.25 })
 
       const label = new Text({
-        text:  z.label,
+        text: z.label,
         style: {
-          fontFamily:    '"SF Mono", "Fira Code", monospace',
-          fontSize:      11,
-          fill:          z.color,
+          fontFamily: '"SF Mono", "Fira Code", monospace',
+          fontSize: 11,
+          fill: z.color,
           letterSpacing: 2,
         },
       })
@@ -123,15 +123,15 @@ export class CosmosGame {
 
   private _buildAvatar(
     username: string,
-    color:    number,
-    isMe:     boolean = false,
+    color: number,
+    isMe: boolean = false,
   ): AvatarObject {
     const container = new Container()
 
     if (isMe) {
       const ring = new Graphics()
-      const R    = this.PROXIMITY_RADIUS
-      const SEG  = 28
+      const R = this.PROXIMITY_RADIUS
+      const SEG = 28
       for (let i = 0; i < SEG; i++) {
         const a0 = (i / SEG) * Math.PI * 2
         const a1 = ((i + 0.68) / SEG) * Math.PI * 2
@@ -162,11 +162,11 @@ export class CosmosGame {
     }
 
     const label = new Text({
-      text:  username,
+      text: username,
       style: {
-        fontFamily:    '"SF Mono", "Fira Code", monospace',
-        fontSize:      11,
-        fill:          0xdde3ea,
+        fontFamily: '"SF Mono", "Fira Code", monospace',
+        fontSize: 11,
+        fill: 0xdde3ea,
         letterSpacing: 0.5,
       },
     })
@@ -197,10 +197,10 @@ export class CosmosGame {
     let dx = 0
     let dy = 0
 
-    if (this.keys['ArrowLeft']  || this.keys['KeyA']) dx -= 1
+    if (this.keys['ArrowLeft'] || this.keys['KeyA']) dx -= 1
     if (this.keys['ArrowRight'] || this.keys['KeyD']) dx += 1
-    if (this.keys['ArrowUp']    || this.keys['KeyW']) dy -= 1
-    if (this.keys['ArrowDown']  || this.keys['KeyS']) dy += 1
+    if (this.keys['ArrowUp'] || this.keys['KeyW']) dy -= 1
+    if (this.keys['ArrowDown'] || this.keys['KeyS']) dy += 1
 
     if (dx !== 0 && dy !== 0) { dx *= 0.7071; dy *= 0.7071 }
 
@@ -212,7 +212,7 @@ export class CosmosGame {
     this.myAvatar.container.y = this.position.y
 
     // camera
-    const hw = this.app.screen.width  / 2
+    const hw = this.app.screen.width / 2
     const hh = this.app.screen.height / 2
     this.world.x = hw - this.position.x
     this.world.y = hh - this.position.y
@@ -236,12 +236,12 @@ export class CosmosGame {
 
   addPlayer(id: string, x: number, y: number, username: string): void {
     if (this.otherPlayers.has(id)) return
-    const color  = pickColor(id)
+    const color = pickColor(id)
     const avatar = this._buildAvatar(username, color, false)
     avatar.container.x = x
     avatar.container.y = y
-    avatar.targetX     = x
-    avatar.targetY     = y
+    avatar.targetX = x
+    avatar.targetY = y
     this.world.addChild(avatar.container)
     this.otherPlayers.set(id, avatar)
   }
@@ -263,7 +263,7 @@ export class CosmosGame {
 
   getNearbyPlayerIds(): string[] {
     const { x, y } = this.position
-    const nearby:   string[] = []
+    const nearby: string[] = []
     for (const [id, data] of this.otherPlayers) {
       const dx = data.container.x - x
       const dy = data.container.y - y
@@ -277,8 +277,8 @@ export class CosmosGame {
   destroy(): void {
     this._isDestroyed = true;
     window.removeEventListener('keydown', this._keydown)
-    window.removeEventListener('keyup',   this._keyup)
-    
+    window.removeEventListener('keyup', this._keyup)
+
     if (this._isInitialized) {
       this.app?.destroy({ removeView: true, children: true } as any)
     }
