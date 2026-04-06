@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react'
 import type { CSSProperties } from 'react'
 import LoginScreen from './components/LoginScreen'
+import SignupScreen from './components/SignupScreen'
 import GameCanvas from './components/GameCanvas'
 import ChatRoom from './components/ChatRoom'
 import { CosmosGame } from '../game/CosmosGame'
@@ -9,6 +10,7 @@ import type { PlayerData, MoveData } from '../types/player'
 
 export default function App() {
   const [username, setUsername] = useState<string | null>(null)
+  const [authScreen, setAuthScreen] = useState<'login' | 'signup'>('login')
   const [proximityState, setProximityState] = useState<{ roomId: string, otherUserId: string } | null>(null)
 
   const handleGameReady = useCallback((game: CosmosGame): void => {
@@ -49,7 +51,10 @@ export default function App() {
   }, [username])
 
   if (!username) {
-    return <LoginScreen onEnter={setUsername} />
+    if (authScreen === 'login') {
+      return <LoginScreen onLogin={setUsername} onSwitchToSignup={() => setAuthScreen('signup')} />
+    }
+    return <SignupScreen onSignup={setUsername} onSwitchToLogin={() => setAuthScreen('login')} />
   }
 
   return (

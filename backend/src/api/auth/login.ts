@@ -4,13 +4,12 @@ import { generateAccessToken, generateRefreshToken } from "../../config/jwt.ts";
 
 export const login = async (req: Request, res: Response): Promise<void> => {
     try {
-        const { username, password, userId } = req.body;
+        const { username, password } = req.body;
 
         if(!username) { res.status(403).json({error: 'Username not found'}); return; }
         if(!password) { res.status(403).json({error: 'Password required'}); return; }
-        if(!userId) { res.status(403).json({error: 'User ID required'}); return; }
 
-        const result = await loginController({username, password, userId});
+        const result = await loginController({username, password});
         
         const payload = { userId: result.userId, username: result.username };
         const accessToken = generateAccessToken(payload);

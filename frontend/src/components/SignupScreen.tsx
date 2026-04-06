@@ -3,12 +3,12 @@ import type { FormEvent } from 'react'
 import { styles } from '../../styles/style.ts'
 import { fetchWithAuth, setAccessToken } from '../lib/api.ts'
 
-interface LoginScreenProps {
-  onLogin: (username: string) => void
-  onSwitchToSignup: () => void
+interface SignupScreenProps {
+  onSignup: (username: string) => void
+  onSwitchToLogin: () => void
 }
 
-export default function LoginScreen({ onLogin, onSwitchToSignup }: LoginScreenProps) {
+export default function SignupScreen({ onSignup, onSwitchToLogin }: SignupScreenProps) {
   const [name, setName] = useState<string>('')
   const [password, setPassword] = useState<string>('')
   const [shake, setShake] = useState<boolean>(false)
@@ -26,21 +26,25 @@ export default function LoginScreen({ onLogin, onSwitchToSignup }: LoginScreenPr
     }
     
     try {
-        const res = await fetchWithAuth('/auth/login', {
+        const res = await fetchWithAuth('/auth/signup', {
             method: 'POST',
-            body: JSON.stringify({ username: trimmed, password: trimmedPass })
+            body: JSON.stringify({ 
+                username: trimmed, 
+                password: trimmedPass, 
+                userId: window.crypto.randomUUID() 
+            })
         });
         
         const data = await res.json()
         if (!res.ok) {
-            setError(data.error || 'Login failed')
+            setError(data.error || 'Signup failed')
             setShake(true)
             setTimeout(() => setShake(false), 500)
             return
         }
         
         setAccessToken(data.accessToken)
-        onLogin(data.user.username)
+        onSignup(data.user.username)
     } catch(err: any) {
         setError(err.message || 'An error occurred')
     }
@@ -55,12 +59,10 @@ export default function LoginScreen({ onLogin, onSwitchToSignup }: LoginScreenPr
           <span style={styles.dot} />
         </div>
 
-        <h1 style={styles.title}>Virtual Cosmos</h1>
+        <h1 style={styles.title}>Join Cosmos</h1>
 
         <p style={styles.sub}>
-          Move with <kbd style={styles.kbd}>WASD</kbd> or arrow keys.
-          <br />
-          Walk up to someone to start chatting.
+          Create an account to start playing.
         </p>
 
         <form onSubmit={handleSubmit} style={styles.form}>
@@ -82,12 +84,12 @@ export default function LoginScreen({ onLogin, onSwitchToSignup }: LoginScreenPr
             style={{ ...styles.input, ...(shake && !password.trim() ? styles.inputShake : {}) }}
           />
           <button type="submit" style={styles.btn}>
-            Enter cosmos →
+            Sign up →
           </button>
         </form>
-
-        <p style={{ marginTop: '1rem', fontSize: '0.85rem', color: '#3a4a5c', cursor: 'pointer', textDecoration: 'underline' }} onClick={onSwitchToSignup}>
-           Don't have an account? Sign up
+        
+        <p style={{ marginTop: '1rem', fontSize: '0.85rem', color: '#3a4a5c', cursor: 'pointer', textDecoration: 'underline' }} onClick={onSwitchToLogin}>
+           Already have an account? Log in
         </p>
       </div>
 
@@ -107,4 +109,3 @@ export default function LoginScreen({ onLogin, onSwitchToSignup }: LoginScreenPr
     </div>
   )
 }
-

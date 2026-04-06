@@ -10,3 +10,9 @@ export interface MoveData {
     x: number
     y: number
 }
+
+export interface UserData {
+    userId: string;
+    username: string;
+    password: string;
+}

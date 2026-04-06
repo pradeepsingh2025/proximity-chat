@@ -138,7 +138,7 @@ export class CosmosGame {
         ring.arc(0, 0, R, a0, a1)
         ring.stroke({ color: 0x4f9cf9, width: 1, alpha: 0.18 })
       }
-      this.proximityRing = ring
+      this.proximityRing! = ring
       container.addChild(ring)
     }
 
