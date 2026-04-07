@@ -16,7 +16,7 @@ export interface AvatarObject {
 }
 
 export interface ZoneConfig {
-    x: number; y: number; w: number; h: number
+    x: number; y: number; r: number
     label: string; color: number
 }
 

@@ -107,27 +107,101 @@ export class CosmosGame {
 
   private _buildRoomZones(): void {
     for (const z of ROOM_ZONES) {
-      const g = new Graphics()
-      g.rect(z.x, z.y, z.w, z.h)
-      g.fill({ color: z.color, alpha: 0.04 })
-      g.rect(z.x, z.y, z.w, z.h)
-      g.stroke({ color: z.color, width: 1, alpha: 0.25 })
+      const container = new Container()
+      container.x = z.x
+      container.y = z.y
+
+      // Outer atmospheric glow
+      const atmosphere = new Graphics()
+      for (let i = 1; i <= 4; i++) {
+        atmosphere.circle(0, 0, z.r + i * (z.r * 0.08))
+        atmosphere.fill({ color: z.color, alpha: 0.1 / i })
+      }
+      container.addChild(atmosphere)
+
+      if (z.label === 'Jupiter') {
+        const ring = new Graphics()
+        ring.ellipse(0, 0, z.r * 2.2, z.r * 0.6)
+        ring.stroke({ color: 0xaa88cc, width: z.r * 0.15, alpha: 0.4 })
+        ring.rotation = -0.2
+        container.addChild(ring)
+      }
+
+      const planetBase = new Graphics()
+      planetBase.circle(0, 0, z.r)
+      planetBase.fill({ color: z.color })
+
+      const details = new Graphics()
+      if (z.label === 'Earth') {
+        const land = 0x51cf66
+        details.circle(-z.r*0.3, -z.r*0.2, z.r*0.4)
+        details.circle(z.r*0.2, z.r*0.4, z.r*0.5)
+        details.circle(z.r*0.6, -z.r*0.2, z.r*0.3)
+        details.fill({ color: land, alpha: 0.85 })
+      } else if (z.label === 'Mars') {
+        const crater = 0x9e2a2b
+        details.circle(-z.r*0.4, -z.r*0.3, z.r*0.2)
+        details.circle(z.r*0.3, z.r*0.1, z.r*0.15)
+        details.circle(-z.r*0.1, z.r*0.5, z.r*0.25)
+        details.fill({ color: crater, alpha: 0.5 })
+      } else if (z.label === 'Jupiter') {
+        const stripe = 0x8a3c9e
+        details.rect(-z.r*1.5, -z.r*0.4, z.r*3, z.r*0.2)
+        details.rect(-z.r*1.5, 0, z.r*3, z.r*0.25)
+        details.rect(-z.r*1.5, z.r*0.5, z.r*3, z.r*0.15)
+        details.fill({ color: stripe, alpha: 0.4 })
+        
+        details.circle(z.r*0.3, z.r*0.15, z.r*0.15)
+        details.fill({ color: 0xff922b, alpha: 0.6 })
+      } else if (z.label === 'Neptune') {
+        details.circle(-z.r*0.2, z.r*0.2, z.r*0.2)
+        details.fill({ color: 0x0c85fd, alpha: 0.6 })
+      }
+
+      // 3D crescent shadow over the planet
+      const shadow = new Graphics()
+      shadow.circle(z.r * 0.3, z.r * 0.3, z.r * 0.85)
+      shadow.fill({ color: 0x000000, alpha: 0.65 })
+
+      const innerGlow = new Graphics()
+      innerGlow.circle(-z.r * 0.2, -z.r * 0.2, z.r * 0.8)
+      innerGlow.fill({ color: 0xffffff, alpha: 0.15 })
+
+      const planetContent = new Container()
+      planetContent.addChild(planetBase, details, shadow, innerGlow)
+
+      const planetMask = new Graphics()
+      planetMask.circle(0, 0, z.r)
+      planetMask.fill(0xffffff)
+
+      planetContent.mask = planetMask
+      
+      container.addChild(planetContent, planetMask)
+
+      if (z.label === 'Neptune') {
+        const ring = new Graphics()
+        ring.ellipse(0, 0, z.r * 1.6, z.r * 0.3)
+        ring.stroke({ color: 0xffffff, width: z.r * 0.05, alpha: 0.35 })
+        ring.rotation = 0.4
+        container.addChild(ring)
+      }
 
       const label = new Text({
-        text: z.label,
+        text: z.label.toUpperCase(),
         style: {
           fontFamily: '"SF Mono", "Fira Code", monospace',
-          fontSize: 11,
-          fill: z.color,
-          letterSpacing: 2,
+          fontSize: 16,
+          fontWeight: 'bold',
+          fill: 0xffffff,
+          letterSpacing: 4,
         },
       })
-      label.x = z.x + 10
-      label.y = z.y + 8
-      label.alpha = 0.5
+      label.anchor.set(0.5, 0.5)
+      label.y = z.r + 40
+      label.alpha = 0.9
 
-      this.world.addChild(g)
-      this.world.addChild(label)
+      container.addChild(label)
+      this.world.addChild(container)
     }
   }
 
