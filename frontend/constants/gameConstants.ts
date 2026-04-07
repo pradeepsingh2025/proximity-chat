@@ -7,7 +7,7 @@ export const PLAYER_COLORS: readonly number[] = [
 
 export const WORLD_BOUND  = 1900
 export const WORLD_SIZE   = 4000
-export const GRID_STEP    = 64
+export const GRID_STEP    = 28
 export const PLAYER_SPEED = 3.2
 export const PROXIMITY_RADIUS: number   = 130
 

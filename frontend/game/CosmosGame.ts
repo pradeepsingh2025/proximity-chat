@@ -7,7 +7,6 @@ export class CosmosGame {
   private app!: Application
   private world!: Container
   private myAvatar!: AvatarObject
-  private proximityRing!: Graphics
 
   private otherPlayers = new Map<string, AvatarObject>()
   private keys: Record<string, boolean> = {}
@@ -32,7 +31,7 @@ export class CosmosGame {
     this._keyup = this._onKeyUp.bind(this)
   }
 
-  // ─── Init ──────────────────────────────────────────────────────────────────
+  // Init 
 
   async init(mountEl: HTMLElement, username: string): Promise<void> {
     this.app = new Application()
@@ -70,7 +69,7 @@ export class CosmosGame {
     this.app.ticker.add(this._tick.bind(this))
   }
 
-  // ─── World ─────────────────────────────────────────────────────────────────
+  // World 
 
   private _buildGrid(): void {
     const g = new Graphics()
@@ -119,7 +118,7 @@ export class CosmosGame {
     }
   }
 
-  // ─── Avatar ────────────────────────────────────────────────────────────────
+  // Avatar ─────────────────────────────────────────
 
   private _buildAvatar(
     username: string,
@@ -128,39 +127,69 @@ export class CosmosGame {
   ): AvatarObject {
     const container = new Container()
 
-    if (isMe) {
-      const ring = new Graphics()
-      const R = this.PROXIMITY_RADIUS
-      const SEG = 28
-      for (let i = 0; i < SEG; i++) {
-        const a0 = (i / SEG) * Math.PI * 2
-        const a1 = ((i + 0.68) / SEG) * Math.PI * 2
-        ring.arc(0, 0, R, a0, a1)
-        ring.stroke({ color: 0x4f9cf9, width: 1, alpha: 0.18 })
-      }
-      this.proximityRing! = ring
-      container.addChild(ring)
-    }
-
+    // ── soft glow under the character ──
     const halo = new Graphics()
-    halo.circle(0, 0, 26)
-    halo.fill({ color, alpha: 0.15 })
+    halo.circle(0, 8, 20)
+    halo.fill({ color, alpha: 0.12 })
     container.addChild(halo)
 
-    const circle = new Graphics()
-    circle.circle(0, 0, 18)
-    circle.fill({ color })
-    circle.circle(-5, -5, 6)
-    circle.fill({ color: 0xffffff, alpha: 0.18 })
-    container.addChild(circle)
+    // ── human figure ──
+    const figure = new Graphics()
 
+    // Head (round)
+    figure.circle(0, -18, 9)
+    figure.fill({ color })
+    // Head highlight
+    figure.circle(-3, -21, 3.5)
+    figure.fill({ color: 0xffffff, alpha: 0.22 })
+
+    // Neck
+    figure.rect(-2.5, -9, 5, 4)
+    figure.fill({ color })
+
+    // Body / torso (rounded rect)
+    figure.roundRect(-9, -6, 18, 18, 4)
+    figure.fill({ color })
+    // Body shading
+    figure.roundRect(-9, 2, 18, 10, 4)
+    figure.fill({ color: 0x000000, alpha: 0.1 })
+
+    // Left arm
+    figure.roundRect(-14, -4, 5, 16, 2.5)
+    figure.fill({ color })
+
+    // Right arm
+    figure.roundRect(9, -4, 5, 16, 2.5)
+    figure.fill({ color })
+
+    // Left leg
+    figure.roundRect(-7, 12, 6, 14, 3)
+    figure.fill({ color })
+
+    // Right leg
+    figure.roundRect(1, 12, 6, 14, 3)
+    figure.fill({ color })
+
+    // Shoes (slightly darker)
+    figure.roundRect(-7, 23, 6, 4, 2)
+    figure.fill({ color: 0x000000, alpha: 0.2 })
+    figure.roundRect(1, 23, 6, 4, 2)
+    figure.fill({ color: 0x000000, alpha: 0.2 })
+
+    container.addChild(figure)
+
+    // ── "me" indicator: glowing dot above head ──
     if (isMe) {
       const dot = new Graphics()
-      dot.circle(0, -26, 4)
+      dot.circle(0, -32, 3.5)
       dot.fill({ color: 0x4f9cf9 })
+      // outer glow
+      dot.circle(0, -32, 7)
+      dot.fill({ color: 0x4f9cf9, alpha: 0.18 })
       container.addChild(dot)
     }
 
+    // ── username label ──
     const label = new Text({
       text: username,
       style: {
@@ -171,13 +200,14 @@ export class CosmosGame {
       },
     })
     label.anchor.set(0.5, 0)
-    label.y = 26
+    label.y = 30
     container.addChild(label)
 
-    return { container, circle, halo, label, color }
+    return { container, circle: figure, halo, label, color }
   }
 
-  // ─── Input ─────────────────────────────────────────────────────────────────
+
+  // Input 
 
   private _onKeyDown(e: KeyboardEvent): void {
     this.keys[e.code] = true
@@ -190,7 +220,7 @@ export class CosmosGame {
     this.keys[e.code] = false
   }
 
-  // ─── Game loop ─────────────────────────────────────────────────────────────
+  // Game loop 
 
   private _tick(ticker: Ticker): void {
     const dt = ticker.deltaTime
@@ -232,7 +262,7 @@ export class CosmosGame {
     this.onProximity?.(this.getNearbyPlayerIds())
   }
 
-  // ─── Public API ────────────────────────────────────────────────────────────
+  // Public API 
 
   addPlayer(id: string, x: number, y: number, username: string): void {
     if (this.otherPlayers.has(id)) return

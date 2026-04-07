@@ -92,7 +92,6 @@ export default function App() {
         <ChatHistoryPanel currentUsername={username} onClose={() => setShowHistory(false)} />
       )}
 
-      {/* HUD — extend with chat panel, online count, etc. */}
       <div style={hudStyle}>
         <span style={nameStyle}>{username}</span>
         <span style={hintStyle}>WASD / ↑↓←→ to move</span>
