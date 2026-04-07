@@ -1,6 +1,6 @@
 import { Application, Graphics, Container, Text, Ticker } from 'pixi.js'
 import type { Position, AvatarObject, MoveCallback, ProximityCallback } from '../types/gameTypes'
-import { WORLD_BOUND, WORLD_SIZE, GRID_STEP, PLAYER_SPEED, ROOM_ZONES, PROXIMITY_RADIUS } from '../constants/gameConstants'
+import { WORLD_BOUND, WORLD_SIZE, PLAYER_SPEED, ROOM_ZONES, PROXIMITY_RADIUS } from '../constants/gameConstants'
 import { pickColor } from './gameHelper'
 
 export class CosmosGame {
@@ -59,7 +59,7 @@ export class CosmosGame {
     this.world = new Container()
     this.app.stage.addChild(this.world)
 
-    this._buildGrid()
+    this._buildUniverse()
     this._buildRoomZones()
     this.myAvatar = this._buildAvatar(username, 0x4f9cf9, true)
     this.world.addChild(this.myAvatar.container)
@@ -71,23 +71,36 @@ export class CosmosGame {
 
   // World 
 
-  private _buildGrid(): void {
+  private _buildUniverse(): void {
     const g = new Graphics()
 
-    for (let x = -WORLD_SIZE; x <= WORLD_SIZE; x += GRID_STEP) {
-      g.moveTo(x, -WORLD_SIZE).lineTo(x, WORLD_SIZE)
+    const NUM_STARS = 4000;
+    for (let i = 0; i < NUM_STARS; i++) {
+      const x = (Math.random() * 2 - 1) * WORLD_SIZE;
+      const y = (Math.random() * 2 - 1) * WORLD_SIZE;
+      const radius = Math.random() * 1.5 + 0.5;
+      const alpha = Math.random() * 0.7 + 0.3;
+      
+      const colors = [0xffffff, 0xe2f1fa, 0xfce4cd, 0xdcd8fa];
+      const color = colors[Math.floor(Math.random() * colors.length)];
+      
+      g.circle(x, y, radius);
+      g.fill({ color, alpha });
     }
-    for (let y = -WORLD_SIZE; y <= WORLD_SIZE; y += GRID_STEP) {
-      g.moveTo(-WORLD_SIZE, y).lineTo(WORLD_SIZE, y)
-    }
-    g.stroke({ color: 0x161d27, width: 1 })
 
-    for (let x = -WORLD_SIZE; x <= WORLD_SIZE; x += GRID_STEP) {
-      for (let y = -WORLD_SIZE; y <= WORLD_SIZE; y += GRID_STEP) {
-        g.circle(x, y, 1.2)
-      }
+    // Add some soft nebulas
+    const NUM_NEBULAS = 20;
+    for (let i = 0; i < NUM_NEBULAS; i++) {
+      const x = (Math.random() * 2 - 1) * WORLD_SIZE;
+      const y = (Math.random() * 2 - 1) * WORLD_SIZE;
+      const radius = Math.random() * 300 + 100;
+      const alpha = Math.random() * 0.03 + 0.01;
+      const colors = [0x4f9cf9, 0xcc5de8, 0xf06595, 0x20c997];
+      const color = colors[Math.floor(Math.random() * colors.length)];
+      
+      g.circle(x, y, radius);
+      g.fill({ color, alpha });
     }
-    g.fill({ color: 0x1e2d3d })
 
     this.world.addChildAt(g, 0)
   }
