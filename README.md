@@ -2,6 +2,8 @@
 
 A real-time, multiplayer 2D world where players move around a shared canvas and **automatically start chatting when they walk near each other**. Built with a WebSocket-first architecture, Redis geospatial indexing, and a PixiJS game renderer.
 
+![alt text](frontend/public/universe.png)
+
 > Walk up to someone → a chat room opens.  
 > Walk away → it closes automatically and the transcript is saved.  
 > No buttons, no lobbies — just proximity.
