@@ -9,11 +9,11 @@ export const refreshToken = async (req: Request, res: Response): Promise<void> =
             return;
         }
 
-        const decoded = verifyRefreshToken(cookies.refreshToken) as { userId: string, username: string };
-        const payload = { userId: decoded.userId, username: decoded.username };
+        const decoded = verifyRefreshToken(cookies.refreshToken) as { username: string };
+        const payload = { username: decoded.username };
         
         const accessToken = generateAccessToken(payload);
-        res.json({ accessToken });
+        res.json({ accessToken, username: payload.username });
     } catch (error: any) {
         res.status(403).json({ error: 'Invalid or expired refresh token' });
     }

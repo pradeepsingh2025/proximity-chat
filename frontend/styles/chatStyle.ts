@@ -131,3 +131,84 @@ export const buttonStyle: CSSProperties = {
   cursor: 'pointer',
   transition: 'background 0.2s',
 };
+
+export const historyPanelStyle: CSSProperties = {
+  position: 'fixed',
+  top: '50%',
+  left: '50%',
+  transform: 'translate(-50%, -50%)',
+  width: '450px',
+  maxHeight: '80vh',
+  display: 'flex',
+  flexDirection: 'column',
+  background: 'rgba(15, 23, 42, 0.95)',
+  backdropFilter: 'blur(16px)',
+  WebkitBackdropFilter: 'blur(16px)',
+  border: '1px solid rgba(255, 255, 255, 0.1)',
+  borderRadius: '16px',
+  boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
+  fontFamily: '"Inter", "Roboto", sans-serif',
+  overflow: 'hidden',
+  zIndex: 1000,
+};
+
+export const historyCloseButtonStyle: CSSProperties = {
+  background: 'transparent',
+  border: 'none',
+  color: '#94a3b8',
+  cursor: 'pointer',
+  fontSize: '1.2rem',
+  padding: '4px',
+};
+
+export const historyListStyle: CSSProperties = {
+  overflowY: 'auto',
+  padding: '16px',
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '16px',
+};
+
+export const historyItemStyle: CSSProperties = {
+  background: 'rgba(255, 255, 255, 0.03)',
+  border: '1px solid rgba(255, 255, 255, 0.05)',
+  borderRadius: '12px',
+  padding: '12px',
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '8px',
+};
+
+export const historyItemHeaderStyle: CSSProperties = {
+  display: 'flex',
+  justifyContent: 'space-between',
+  borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
+  paddingBottom: '8px',
+  fontSize: '0.8rem',
+  color: '#e2e8f0',
+  fontWeight: 600,
+};
+
+export const historyDateStyle: CSSProperties = {
+  color: '#94a3b8',
+  fontSize: '0.7rem',
+  fontWeight: 400,
+};
+
+export const historyMessagesStyle: CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '6px',
+};
+
+export const historyMessageRowStyle: CSSProperties = {
+  fontSize: '0.8rem',
+  lineHeight: 1.4,
+  color: '#cbd5e1',
+};
+
+export const historyMsgSenderStyle: CSSProperties = {
+  fontWeight: 600,
+  color: '#3b82f6',
+  marginRight: '6px',
+};

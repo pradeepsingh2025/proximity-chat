@@ -15,25 +15,52 @@ import {
     inputStyle,
     buttonStyle
 } from '../../styles/chatStyle.ts'
-import { socket } from '../../lib/socket';
+import { socket } from '../../lib/socket.ts';
 import type { ChatMessage, ChatRoomProps } from '../../types/chat.ts'
+import { fetchWithAuth } from '../lib/api.ts';
 
 
 
-export default function ChatRoom({ roomId, otherUserId }: ChatRoomProps) {
+export default function ChatRoom({ roomId, otherUsername, currentUsername }: ChatRoomProps) {
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [inputValue, setInputValue] = useState('');
     const messagesEndRef = useRef<HTMLDivElement>(null);
+    const messagesRef = useRef<ChatMessage[]>([]);
 
     useEffect(() => {
-        const handleIncomingMessage = (data: { senderId: string; message: string }) => {
+        messagesRef.current = messages;
+    }, [messages]);
+
+    useEffect(() => {
+        return () => {
+            if (messagesRef.current.length > 0) {
+                const sortedUsers = [currentUsername, otherUsername].sort();
+                if (currentUsername === sortedUsers[0]) {
+                    fetchWithAuth('/chats', {
+                        method: 'POST',
+                        body: JSON.stringify({
+                            participants: [currentUsername, otherUsername],
+                            messages: messagesRef.current.map(m => ({
+                                sender: m.senderUsername,
+                                content: m.message,
+                                timestamp: m.timestamp
+                            }))
+                        })
+                    }).catch((err: any) => console.error("Failed to save chat history", err));
+                }
+            }
+        };
+    }, [currentUsername, otherUsername]);
+
+    useEffect(() => {
+        const handleIncomingMessage = (data: { senderUsername: string; message: string }) => {
             setMessages((prev) => [
                 ...prev,
                 {
                     id: Math.random().toString(36).substring(7),
-                    senderId: data.senderId,
+                    senderUsername: data.senderUsername,
                     message: data.message,
-                    timestamp: Date.now()
+                    timestamp: new Date()
                 }
             ]);
         };
@@ -55,9 +82,9 @@ export default function ChatRoom({ roomId, otherUserId }: ChatRoomProps) {
 
         const newMsg = {
             id: Math.random().toString(36).substring(7),
-            senderId: socket.id as string,
+            senderUsername: currentUsername,
             message: inputValue.trim(),
-            timestamp: Date.now()
+            timestamp: new Date()
         };
 
         // Optimistically add message
@@ -74,7 +101,7 @@ export default function ChatRoom({ roomId, otherUserId }: ChatRoomProps) {
                 <span style={headerTitleStyle}>Proximity Chat</span>
                 <div style={statusContainerStyle}>
                     <div style={activeDotStyle} />
-                    <span style={statusTextStyle}>ID: {otherUserId.substring(0, 4)}</span>
+                    <span style={statusTextStyle}>User: {otherUsername}</span>
                 </div>
             </div>
 
@@ -83,7 +110,7 @@ export default function ChatRoom({ roomId, otherUserId }: ChatRoomProps) {
                     <div style={emptyMessageStyle}>Say hello! They are close by.</div>
                 ) : (
                     messages.map((msg) => {
-                        const isMe = msg.senderId === socket.id;
+                        const isMe = msg.senderUsername === currentUsername;
                         return (
                             <div key={msg.id} style={{ ...messageRowStyle, justifyContent: isMe ? 'flex-end' : 'flex-start' }}>
                                 <div style={isMe ? myMessageStyle : otherMessageStyle}>

@@ -3,7 +3,7 @@
 A real-time, multiplayer 2D world where players move around a shared canvas and **automatically start chatting when they walk near each other**. Built with a WebSocket-first architecture, Redis geospatial indexing, and a PixiJS game renderer.
 
 > Walk up to someone → a chat room opens.  
-> Walk away → it closes.  
+> Walk away → it closes automatically and the transcript is saved.  
 > No buttons, no lobbies — just proximity.
 
 ---
@@ -16,14 +16,17 @@ A real-time, multiplayer 2D world where players move around a shared canvas and 
   - [Directory Structure](#backend-directory-structure)
   - [Entry Point](#entry-point)
   - [Authentication System](#authentication-system)
+  - [Auth Middleware](#auth-middleware)
   - [Database Layer](#database-layer)
   - [Redis — Geospatial Player Storage](#redis--geospatial-player-storage)
   - [Socket.IO Event Protocol](#socketio-event-protocol)
   - [Proximity Detection Engine](#proximity-detection-engine)
+  - [Chat History API](#chat-history-api)
   - [Environment Variables](#environment-variables)
 - [Frontend](#frontend)
   - [Directory Structure](#frontend-directory-structure)
   - [App Shell & Auth Flow](#app-shell--auth-flow)
+  - [Persistent Auth — Zustand Store](#persistent-auth--zustand-store)
   - [API Client & Token Management](#api-client--token-management)
   - [Game Engine — CosmosGame](#game-engine--cosmosgame)
   - [Components](#components)
@@ -39,14 +42,18 @@ A real-time, multiplayer 2D world where players move around a shared canvas and 
 ┌─────────────────────────────────────────────────────────┐
 │                      Frontend (Vite + React)            │
 │                                                         │
+│  authStore (Zustand) ← checkAuth() on mount             │
+│         │  POST /api/auth/refresh (cookie)              │
+│         ▼                                               │
 │  LoginScreen / SignupScreen                             │
 │         │  POST /api/auth/*                             │
 │         ▼                                               │
 │  GameCanvas ← PixiJS (CosmosGame)                       │
-│         │  socket.emit('player:move')                   │
+│         │  socket.emit('player:join / move')            │
 │         │  socket.on('proximity:connect')               │
 │         ▼                                               │
 │  ChatRoom (appears on proximity)                        │
+│  ChatHistoryPanel (toggle from HUD)                     │
 └────────────────┬────────────────────────────────────────┘
                  │  WebSocket (Socket.IO)
                  │  HTTP REST (Express)
@@ -56,16 +63,21 @@ A real-time, multiplayer 2D world where players move around a shared canvas and 
 │  REST API ── /api/auth/login                            │
 │           ── /api/auth/signup                           │
 │           ── /api/auth/refresh                          │
+│           ── /api/auth/logout          ← NEW            │
+│           ── GET  /api/chats           ← NEW            │
+│           ── POST /api/chats           ← NEW            │
 │                                                         │
 │  Socket.IO ── player:join / move / disconnect           │
 │            ── proximity:connect / disconnect            │
 │            ── chat:message                              │
+│            ── player:sync_position     ← NEW            │
 │                                                         │
-│  ┌──────────┐    ┌───────────────────────────┐          │
-│  │ MongoDB  │    │ Redis (Geospatial Index)   │          │
-│  │ (Users)  │    │  GEOADD / GEOSEARCH        │          │
-│  └──────────┘    │  Active proximity pairs    │          │
-│                  └───────────────────────────┘          │
+│  ┌──────────────────┐  ┌───────────────────────────┐    │
+│  │     MongoDB      │  │ Redis (Geospatial Index)   │    │
+│  │  Users           │  │  GEOADD / GEOSEARCH        │    │
+│  │  ChatHistory ←NEW│  │  Socket TTL keys (Lua CAS) │    │
+│  └──────────────────┘  │  Active proximity pairs    │    │
+│                        └───────────────────────────┘    │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -80,7 +92,8 @@ A real-time, multiplayer 2D world where players move around a shared canvas and 
 | **WebSocket**      | Socket.IO 4                                     |
 | **Database**       | MongoDB (Mongoose 9)                            |
 | **Cache / Geo**    | Redis (ioredis) — `GEOADD`, `GEOSEARCH`         |
-| **Auth**           | JWT (access + refresh tokens), bcrypt            |
+| **Auth**           | JWT (access + refresh tokens), bcrypt           |
+| **State Mgmt**     | Zustand 5                                       |
 | **Frontend**       | React 19, Vite 8, TypeScript                    |
 | **Game Renderer**  | PixiJS 8                                        |
 | **Socket Client**  | socket.io-client 4                              |
@@ -100,10 +113,13 @@ backend/
     ├── index.ts                  # Express + Socket.IO bootstrap
     ├── api/
     │   ├── index.ts              # Route registration
-    │   └── auth/
-    │       ├── login.ts          # POST /api/auth/login
-    │       ├── signup.ts         # POST /api/auth/signup
-    │       └── refresh.ts        # POST /api/auth/refresh
+    │   ├── auth/
+    │   │   ├── login.ts          # POST /api/auth/login
+    │   │   ├── signup.ts         # POST /api/auth/signup
+    │   │   ├── refresh.ts        # POST /api/auth/refresh
+    │   │   └── logout.ts         # POST /api/auth/logout  ← NEW
+    │   └── chats/
+    │       └── index.ts          # GET + POST /api/chats  ← NEW
     ├── controller/
     │   ├── login.ts              # Login business logic
     │   └── signup.ts             # Signup business logic
@@ -112,11 +128,13 @@ backend/
     │   └── jwt.ts                # Token generation & verification
     ├── db/
     │   ├── connection.ts         # Mongoose connect
-    │   └── mongo.ts              # User schema/model
+    │   └── mongo.ts              # User + ChatHistory schemas
+    ├── middleware/
+    │   └── auth.ts               # authenticate() middleware  ← NEW
     ├── redis/
     │   └── index.ts              # ioredis client
     ├── data/
-    │   ├── data.ts               # Player CRUD (Redis geo)
+    │   ├── data.ts               # Player CRUD + socket TTL, validatePairs
     │   └── proximity.ts          # Proximity detection engine
     ├── socket/
     │   └── socket.ts             # Socket.IO event handlers
@@ -142,9 +160,9 @@ The server listens on **port 3000**.
 
 A **two-token JWT architecture** secures the API:
 
-| Token           | Storage           | Lifetime | Purpose                        |
-| --------------- | ----------------- | -------- | ------------------------------ |
-| **Access**      | In-memory (JS)    | 15 min   | Sent in `Authorization` header |
+| Token           | Storage           | Lifetime | Purpose                             |
+| --------------- | ----------------- | -------- | ----------------------------------- |
+| **Access**      | In-memory (JS)    | 15 min   | Sent in `Authorization` header      |
 | **Refresh**     | HttpOnly cookie   | 7 days   | Used only to mint new access tokens |
 
 #### Endpoints
@@ -156,7 +174,6 @@ Creates a new user account.
 ```json
 // Request
 {
-  "userId": "uuid-v4",
   "username": "nova",
   "password": "s3cret"
 }
@@ -164,13 +181,13 @@ Creates a new user account.
 // Response 200
 {
   "accessToken": "eyJhbG...",
-  "user": { "userId": "...", "username": "nova" }
+  "user": { "username": "nova" }
 }
 // + Set-Cookie: refreshToken=...; HttpOnly; SameSite=Strict
 ```
 
 - Password is hashed with **bcrypt** (10 salt rounds) before storage.
-- Both `userId` and `username` must be unique.
+- `username` must be unique.
 
 ##### `POST /api/auth/login`
 
@@ -183,18 +200,44 @@ Authenticates an existing user.
 // Response 200
 {
   "accessToken": "eyJhbG...",
-  "user": { "userId": "...", "username": "nova" }
+  "user": { "username": "nova" }
 }
 ```
 
 ##### `POST /api/auth/refresh`
 
-Reads the `refreshToken` cookie, verifies it, and returns a fresh access token.
+Reads the `refreshToken` cookie, verifies it, and returns a fresh access token **along with the username** — used by the Zustand `checkAuth()` call on app load to restore session without re-logging in.
 
 ```json
 // Response 200
-{ "accessToken": "eyJhbG..." }
+{ "accessToken": "eyJhbG...", "username": "nova" }
 ```
+
+##### `POST /api/auth/logout`
+
+Clears the `refreshToken` cookie server-side, effectively ending the session.
+
+```json
+// Response 200
+{ "message": "Logged out" }
+```
+
+---
+
+### Auth Middleware
+
+**`src/middleware/auth.ts`** exports `authenticate` — an Express middleware that guards protected routes.
+
+```ts
+export const authenticate = (req: AuthRequest, res: Response, next: NextFunction): void => {
+  // 1. Extract Bearer token from Authorization header
+  // 2. Call verifyAccessToken()
+  // 3. Attach decoded { username } to req.user
+  // 4. On failure → 401 / 403
+};
+```
+
+Used by the `/api/chats` router to ensure only the logged-in user can read or write their own chat history.
 
 ---
 
@@ -202,14 +245,23 @@ Reads the `refreshToken` cookie, verifies it, and returns a fresh access token.
 
 #### MongoDB — User Model
 
-| Field      | Type     | Constraints           |
-| ---------- | -------- | --------------------- |
-| `userId`   | String   | required, unique      |
-| `username` | String   | required, unique      |
-| `password` | String   | required (hashed)     |
-| `socketId` | String   | unique                |
-| `x`        | Number   | default: 0            |
-| `y`        | Number   | default: 0            |
+| Field      | Type   | Constraints      |
+| ---------- | ------ | ---------------- |
+| `username` | String | required, unique |
+| `password` | String | required (hashed)|
+| `x`        | Number | default: 0       |
+| `y`        | Number | default: 0       |
+
+> **Note:** `userId` and `socketId` fields have been removed from the schema. Players are now uniquely identified by their `username` across both Redis and Socket.IO.
+
+#### MongoDB — ChatHistory Model
+
+Stores chat transcripts when two players move out of proximity range.
+
+| Field          | Type     | Description                                |
+| -------------- | -------- | ------------------------------------------ |
+| `participants` | String[] | Usernames of the two players               |
+| `messages`     | Array    | `{ sender, content, timestamp }` per message |
 
 Connection string is read from `MONGO_URI` in `.env`.
 
@@ -217,20 +269,24 @@ Connection string is read from `MONGO_URI` in `.env`.
 
 ### Redis — Geospatial Player Storage
 
-Instead of tracking player positions in-memory, the server uses **Redis geospatial commands** for O(log N) proximity queries:
+Player positions live in Redis for O(log N) proximity queries:
 
-| Operation          | Redis Command | Description                                   |
-| ------------------ | ------------- | --------------------------------------------- |
-| Add / update player | `GEOADD`     | Stores `(lon, lat)` mapped from game `(x, y)` |
-| Remove player      | `ZREM`        | Removes member from the sorted set             |
-| Get all positions  | `ZRANGE` + `GEOPOS` | Fetches every player's coordinates       |
-| Proximity search   | `GEOSEARCH`   | Finds all players within a radius              |
+| Operation           | Redis Command       | Description                                    |
+| ------------------- | ------------------- | ---------------------------------------------- |
+| Add / update player | `GEOADD`            | Stores `(lon, lat)` mapped from game `(x, y)`  |
+| Remove player       | `ZREM`              | Removes member from the geo sorted set          |
+| Get all positions   | `ZRANGE` + `GEOPOS` | Fetches every player's coordinates             |
+| Proximity search    | `GEOSEARCH`         | Finds all players within the proximity radius  |
 
-**Coordinate mapping:** Game pixel coordinates are divided by `GEO_SCALE` (111,320 — roughly meters-per-degree at the equator) to convert to valid longitude/latitude values that Redis geo commands expect.
+**Coordinate mapping:** Game pixel coordinates are divided by `GEO_SCALE` (111,320 — roughly meters-per-degree at the equator) to produce valid lon/lat values for Redis geo commands.
 
-**Member format:** Each player is stored as `socketId:username` to allow position lookups and ID extraction.
+**Member key:** Each player is stored by `username` directly — no longer as `socketId:username`.
 
-**Active pairs** are tracked in Redis Sets (`proximity:active-pairs:<socketId>`) so the server knows which connections to tear down on disconnect.
+**Socket TTL keys:** Each connected player's `socketId` is stored in `socket:<username>` with a configurable TTL (`SOCKET_TTL`). This auto-expires ghost entries if the server crashes unexpectedly.
+
+**Lua CAS (Compare-And-Delete):** `removeSocketMapping` uses an atomic Lua script to only delete the socket key if its value still matches the disconnecting socket's ID. This prevents a late-arriving disconnect handler from wiping a key that was already overwritten by a fresh reconnect.
+
+**Active pairs:** Proximity sessions are tracked in Redis Sets (`proximity:active-pairs:<username>`), enabling the server to know which rooms to tear down on disconnect.
 
 ---
 
@@ -240,27 +296,29 @@ All real-time game communication flows through Socket.IO. See the full [Event Re
 
 **Connection lifecycle:**
 
-1. Client authenticates via REST → receives username
+1. Client authenticates via REST (or `checkAuth` restores session from cookie)
 2. Client connects to Socket.IO → emits `player:join`
-3. Server adds player to Redis, broadcasts to others, sends world state back
-4. On each movement frame → `player:move` → server updates Redis, runs proximity check, broadcasts
-5. On disconnect → cleanup from Redis, notify peers, tear down proximity pairs
+3. Server checks for a **ghost socket** (previous tab/refresh) and disconnects it
+4. Server resumes the player's last known position from Redis; emits `player:sync_position` if found
+5. Server calls `validatePairs` to clear any stale proximity entries left over from a crash
+6. On each movement frame → `player:move` → server updates Redis, runs proximity check, broadcasts
+7. On disconnect → guard against reconnect race (Lua CAS), cleanup from Redis, notify peers, tear down proximity rooms
 
 ---
 
 ### Proximity Detection Engine
 
-**`src/data/proximity.ts`** runs on every `player:move` event:
+**`src/data/proximity.ts`** runs on every `player:move` and `player:join` event:
 
 ```
-                  player:move
+              player:move / player:join
                       │
             ┌─────────▼──────────┐
             │   GEOSEARCH 130m   │  ← find everyone within PROXIMITY_RADIUS
             └─────────┬──────────┘
                       │
           ┌───────────▼───────────┐
-          │  Compare with active  │  ← Redis Set of previous neighbors
+          │  Compare with active  │  ← Redis Set of current partners
           │  pairs from Redis     │
           └───┬────────────┬──────┘
               │            │
@@ -273,11 +331,54 @@ All real-time game communication flows through Socket.IO. See the full [Event Re
   + join Socket room  + leave Socket room
 ```
 
-**Key behavior:**
+**Key behaviors:**
+- **One-to-one rooms only:** Each player can be in at most **one** proximity chat at a time. If either player is already engaged, the new proximity event is skipped. This prevents a third player from forcing their way into an existing chat.
 - When two players enter each other's radius → both receive `proximity:connect` with a shared `roomId`
 - When they move apart → both receive `proximity:disconnect`
-- The `roomId` is deterministic: `room:<sortedId1>:<sortedId2>`
+- The `roomId` is deterministic: `room:<sortedUsername1>:<sortedUsername2>`
 - Chat messages are scoped to this room via `socket.to(roomId).emit(...)`
+- On player disconnect → `deletePlayerFromProximity` tears down all of that player's active rooms and notifies their partners
+
+---
+
+### Chat History API
+
+When players move out of proximity range, the frontend saves the session transcript. The backend provides two protected endpoints (both require a valid access token):
+
+#### `GET /api/chats`
+
+Returns all chat sessions where the logged-in user was a participant, sorted newest-first.
+
+```json
+// Response 200
+[
+  {
+    "_id": "...",
+    "participants": ["nova", "orion"],
+    "messages": [
+      { "sender": "nova", "content": "Hey!", "timestamp": "2026-04-07T...", "_id": "..." }
+    ]
+  }
+]
+```
+
+#### `POST /api/chats`
+
+Saves a new chat session. The server validates that the logged-in user is listed in `participants`.
+
+```json
+// Request
+{
+  "participants": ["nova", "orion"],
+  "messages": [
+    { "sender": "nova", "content": "Hey!", "timestamp": "..." },
+    { "sender": "orion", "content": "Hi!", "timestamp": "..." }
+  ]
+}
+
+// Response 201
+{ "success": true, "historyId": "..." }
+```
 
 ---
 
@@ -289,8 +390,8 @@ Create a `backend/.env` file:
 MONGO_URI=mongodb+srv://<user>:<pass>@<cluster>/<dbname>
 REDIS_HOST=127.0.0.1
 REDIS_PORT=6379
-JWT_SECRET=<your-secret-key>
-JWT_REFRESH_SECRET=<your-refresh-secret-key>
+JWT_SECRET=<your-access-token-secret>
+JWT_REFRESH_SECRET=<your-refresh-token-secret>
 ACCESS_TOKEN_EXPIRATION=3600
 REFRESH_TOKEN_EXPIRATION=72000
 ```
@@ -320,7 +421,7 @@ frontend/
 │   └── chat.ts                   # ChatMessage, ChatRoomProps
 ├── styles/
 │   ├── style.ts                  # Auth screen styles
-│   └── chatStyle.ts              # Chat panel styles
+│   └── chatStyle.ts              # Chat panel + history panel styles
 └── src/
     ├── main.tsx                  # React entry point
     ├── App.tsx                   # Root component — auth + game + chat
@@ -328,42 +429,64 @@ frontend/
     ├── index.css
     ├── lib/
     │   └── api.ts                # fetchWithAuth + token management
+    ├── store/
+    │   └── authStore.ts          # Zustand auth store  ← NEW
     └── components/
         ├── LoginScreen.tsx       # Login form
         ├── SignupScreen.tsx       # Signup form
         ├── GameCanvas.tsx        # PixiJS mount + lifecycle
-        └── ChatRoom.tsx          # Proximity chat panel
+        ├── ChatRoom.tsx          # Live proximity chat panel
+        └── ChatHistoryPanel.tsx  # Past chat sessions viewer  ← NEW
 ```
 
 ---
 
 ### App Shell & Auth Flow
 
-**`App.tsx`** manages three states:
+**`App.tsx`** delegates authentication state to `useAuthStore` and manages the overall screen hierarchy:
 
 ```
-                 ┌───────────────┐
-                 │  authScreen?  │
-                 └───┬───────┬───┘
-                     │       │
-              'login'│       │'signup'
-                     ▼       ▼
-            ┌────────────┐ ┌──────────────┐
-            │LoginScreen │ │ SignupScreen  │
-            └─────┬──────┘ └──────┬───────┘
-                  │  onLogin       │  onSignup
-                  │  (username)    │  (username)
-                  └───────┬───────┘
-                          ▼
-              ┌───────────────────────┐
-              │  GameCanvas + HUD     │
-              │  + ChatRoom (if near) │
-              └───────────────────────┘
+                    mount
+                      │
+              checkAuth() ──────────────────────────────▶ "Loading cosmos..."
+                      │  (POST /api/auth/refresh cookie)
+                      │
+           ┌──────────▼──────────┐
+           │  username?          │
+           └──┬──────────────┬───┘
+         null │              │ set
+              ▼              ▼
+    ┌─────────────────┐  ┌──────────────────────────────┐
+    │ LoginScreen  or │  │  GameCanvas + HUD             │
+    │ SignupScreen    │  │  ├── ChatRoom (on proximity)  │
+    └─────────────────┘  │  └── ChatHistoryPanel (toggle)│
+                         └──────────────────────────────┘
 ```
 
-1. **No username?** → Show `LoginScreen` or `SignupScreen` (toggle between them)
-2. **Username set?** → Render `GameCanvas`, emit `player:join`, wire all socket listeners
-3. **Proximity detected?** → Overlay `ChatRoom` component
+**HUD controls:**
+- Displays the current **username**
+- **WASD / Arrow** movement hint
+- **"Chat History"** button — toggles `ChatHistoryPanel`
+- **"Logout"** button — calls `POST /api/auth/logout`, clears the in-memory token, and resets Zustand state
+
+---
+
+### Persistent Auth — Zustand Store
+
+**`src/store/authStore.ts`** manages the global authentication state using **Zustand**.
+
+```ts
+const { username, isCheckingAuth, checkAuth, login, logout } = useAuthStore();
+```
+
+| Action / State   | Description                                                                 |
+| ---------------- | --------------------------------------------------------------------------- |
+| `isCheckingAuth` | `true` on first load while the refresh-token check is in flight             |
+| `checkAuth()`    | Calls `POST /api/auth/refresh` (with cookie), restores `username` + token  |
+| `login()`        | Stores the access token in memory, sets `username`                         |
+| `logout()`       | Clears the access token, resets `username` to `null`                       |
+
+`checkAuth()` is called once in `App.tsx` inside a `useEffect` on mount, enabling **seamless session persistence** across page refreshes without requiring re-login if the refresh token is still valid.
 
 ---
 
@@ -377,9 +500,9 @@ frontend/
 4. If refresh fails → clears token and throws `"Session expired"`
 
 ```ts
-const res = await fetchWithAuth('/auth/login', {
+const res = await fetchWithAuth('/chats', {
   method: 'POST',
-  body: JSON.stringify({ username, password })
+  body: JSON.stringify({ participants, messages })
 });
 ```
 
@@ -392,9 +515,9 @@ const res = await fetchWithAuth('/auth/login', {
 | Responsibility            | Details                                                |
 | ------------------------- | ------------------------------------------------------ |
 | **Canvas init**           | Creates a PixiJS `Application`, attaches to the DOM    |
-| **World rendering**       | Draws an infinite-feel grid with dot intersections      |
+| **World rendering**       | Draws an infinite-feel grid with dot intersections     |
 | **Room zones**            | Renders labeled rectangular zones (Lounge, War Room, Cafeteria) |
-| **Player avatar**         | Circle + halo + username label + proximity ring (local player) |
+| **Player avatar**         | Circle + halo + username label + proximity ring        |
 | **Keyboard input**        | WASD / Arrow keys, diagonal normalization (×0.7071)    |
 | **Game loop**             | 60fps tick — moves player, lerps remote players, fires callbacks |
 | **Camera**                | Follows local player (centered on screen)              |
@@ -436,15 +559,15 @@ game.onProximity = (nearbyIds) => { ... }  // Fires each tick with nearby player
 
 - Form with **username** and **password** fields
 - Calls `POST /api/auth/login` via `fetchWithAuth`
-- Stores access token in memory, triggers `onLogin(username)`
+- On success, calls `useAuthStore.login(username, token)` to persist state
 - Animated **shake** effect on validation error
 - Link to switch to signup
 
 #### `SignupScreen`
 
 - Same structure as login
-- Generates a `userId` via `crypto.randomUUID()`
 - Calls `POST /api/auth/signup` (password hashed server-side)
+- On success, calls `useAuthStore.login(username, token)`
 
 #### `GameCanvas`
 
@@ -459,8 +582,17 @@ game.onProximity = (nearbyIds) => { ... }  // Fires each tick with nearby player
 - **Disappears** when `proximity:disconnect` fires
 - Real-time messaging via `chat:message` socket event
 - Optimistic message rendering (shows immediately, emits to server)
+- On close/disconnect, saves the session via `POST /api/chats`
 - Auto-scrolls to the latest message
 - Styled as a floating panel overlaying the game
+
+#### `ChatHistoryPanel` *(new)*
+
+- Toggled from the in-game HUD's **"Chat History"** button
+- Fetches all past sessions via `GET /api/chats` (authenticated)
+- Displays each session as a card: **partner's username**, **date**, and full message log
+- Shows a "No past encounters found." empty state
+- Styled as a floating overlay panel
 
 ---
 
@@ -468,17 +600,18 @@ game.onProximity = (nearbyIds) => { ... }  // Fires each tick with nearby player
 
 Socket events are wired in `App.tsx` inside the `handleGameReady` callback:
 
-| Event                  | Direction  | Payload                                  | Action                     |
-| ---------------------- | ---------- | ---------------------------------------- | -------------------------- |
-| `player:join`          | Client → Server  | `{ username, x, y }`              | Register in Redis          |
-| `players:init`         | Server → Client  | `PlayerData[]`                     | Render existing players    |
-| `player:joined`        | Server → Client  | `{ id, x, y, username }`          | Add remote avatar          |
-| `player:move`          | Client → Server  | `{ x, y }`                        | Update position in Redis   |
-| `player:moved`         | Server → Client  | `{ id, x, y }`                    | Lerp remote avatar         |
-| `player:left`          | Server → Client  | `{ id }`                          | Remove avatar              |
-| `proximity:connect`    | Server → Client  | `{ userId, roomId }`              | Open ChatRoom              |
-| `proximity:disconnect` | Server → Client  | `{ userId, roomId }`              | Close ChatRoom             |
-| `chat:message`         | Bidirectional     | `{ roomId, message }` / `{ senderId, message }` | Send/receive chat |
+| Event                   | Direction         | Payload                                          | Action                              |
+| ----------------------- | ----------------- | ------------------------------------------------ | ----------------------------------- |
+| `player:join`           | Client → Server   | `{ username, x, y }`                            | Register in Redis, validate pairs   |
+| `player:sync_position`  | Server → Client   | `{ x, y }`                                      | Snap game avatar to resumed position |
+| `players:init`          | Server → Client   | `PlayerData[]`                                   | Render existing players             |
+| `player:joined`         | Server → Client   | `{ id, x, y, username }`                         | Add remote avatar                   |
+| `player:move`           | Client → Server   | `{ x, y }`                                      | Update position in Redis            |
+| `player:moved`          | Server → Client   | `{ id, x, y }`                                  | Lerp remote avatar                  |
+| `player:left`           | Server → Client   | `{ id }`                                        | Remove avatar                       |
+| `proximity:connect`     | Server → Client   | `{ userId, roomId }`                             | Open ChatRoom                       |
+| `proximity:disconnect`  | Server → Client   | `{ userId, roomId }`                             | Close ChatRoom, save history        |
+| `chat:message`          | Bidirectional     | `{ roomId, message }` / `{ senderId, message }` | Send/receive chat                   |
 
 ---
 
@@ -531,7 +664,8 @@ The frontend starts on **http://localhost:5173**.
 3. Move your avatars toward each other using **WASD** or **Arrow keys**
 4. When the avatars are within 130px — a **chat panel** appears automatically
 5. Send messages back and forth in real time
-6. Walk away — the chat closes
+6. Walk away — the chat closes and the transcript is saved
+7. Click **"Chat History"** in the HUD to review past encounters
 
 ---
 
@@ -539,23 +673,24 @@ The frontend starts on **http://localhost:5173**.
 
 ### Client → Server
 
-| Event           | Payload                           | Description                                |
-| --------------- | --------------------------------- | ------------------------------------------ |
-| `player:join`   | `{ username, x, y }`             | Register player in the world               |
-| `player:move`   | `{ x, y }`                       | Report new position (every movement frame) |
-| `chat:message`  | `{ roomId, message }`            | Send a chat message to a proximity room    |
+| Event          | Payload                | Description                                |
+| -------------- | ---------------------- | ------------------------------------------ |
+| `player:join`  | `{ username, x, y }`  | Register player in the world               |
+| `player:move`  | `{ x, y }`            | Report new position (every movement frame) |
+| `chat:message` | `{ roomId, message }` | Send a chat message to a proximity room    |
 
 ### Server → Client
 
-| Event                  | Payload                           | Description                                 |
-| ---------------------- | --------------------------------- | ------------------------------------------- |
-| `players:init`         | `PlayerData[]`                    | Full world state sent to a newly joined player |
-| `player:joined`        | `{ id, x, y, username }`         | A new player entered the world              |
-| `player:moved`         | `{ id, x, y }`                   | A player changed position                   |
-| `player:left`          | `{ id }`                         | A player disconnected                       |
-| `proximity:connect`    | `{ userId, roomId }`             | You entered another player's proximity      |
-| `proximity:disconnect` | `{ userId, roomId }`             | You left another player's proximity         |
-| `chat:message`         | `{ senderId, message }`          | Incoming chat message in a proximity room   |
+| Event                  | Payload                                         | Description                                       |
+| ---------------------- | ----------------------------------------------- | ------------------------------------------------- |
+| `players:init`         | `PlayerData[]`                                  | Full world state sent to a newly joined player    |
+| `player:joined`        | `{ id, x, y, username }`                        | A new player entered the world                    |
+| `player:moved`         | `{ id, x, y }`                                  | A player changed position                         |
+| `player:left`          | `{ id }`                                        | A player disconnected                             |
+| `player:sync_position` | `{ x, y }`                                      | Resume position after reconnect/refresh           |
+| `proximity:connect`    | `{ userId, roomId }`                            | You entered another player's proximity            |
+| `proximity:disconnect` | `{ userId, roomId }`                            | You left another player's proximity               |
+| `chat:message`         | `{ senderId, message }`                         | Incoming chat message in a proximity room         |
 
 ---
 

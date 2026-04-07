@@ -1,14 +1,15 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { styles } from '../../styles/style.ts'
-import { fetchWithAuth, setAccessToken } from '../lib/api.ts'
+import { fetchWithAuth } from '../lib/api.ts'
+import { useAuthStore } from '../store/authStore.ts'
 
 interface LoginScreenProps {
-  onLogin: (username: string) => void
   onSwitchToSignup: () => void
 }
 
-export default function LoginScreen({ onLogin, onSwitchToSignup }: LoginScreenProps) {
+export default function LoginScreen({ onSwitchToSignup }: LoginScreenProps) {
+  const login = useAuthStore(state => state.login);
   const [name, setName] = useState<string>('')
   const [password, setPassword] = useState<string>('')
   const [shake, setShake] = useState<boolean>(false)
@@ -19,6 +20,7 @@ export default function LoginScreen({ onLogin, onSwitchToSignup }: LoginScreenPr
     setError('')
     const trimmed = name.trim()
     const trimmedPass = password.trim()
+    console.log(trimmed, trimmedPass);
     if (!trimmed || !trimmedPass) {
       setShake(true)
       setTimeout(() => setShake(false), 500)
@@ -39,8 +41,7 @@ export default function LoginScreen({ onLogin, onSwitchToSignup }: LoginScreenPr
             return
         }
         
-        setAccessToken(data.accessToken)
-        onLogin(data.user.username)
+        login(data.user.username, data.accessToken)
     } catch(err: any) {
         setError(err.message || 'An error occurred')
     }

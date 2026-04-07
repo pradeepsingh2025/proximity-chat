@@ -11,7 +11,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
 
         const result = await loginController({username, password});
         
-        const payload = { userId: result.userId, username: result.username };
+        const payload = { username: result.username };
         const accessToken = generateAccessToken(payload);
         const refreshToken = generateRefreshToken(payload);
 

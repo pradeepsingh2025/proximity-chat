@@ -1,18 +1,14 @@
-import type { UserData } from "../types/player.ts";
 import { User } from "../db/mongo.ts";
 
 
-export default async function signupController(user: UserData){
-    const {userId, username, password} = user;
+export default async function signupController(user: {username: string, password: string}){
+    const {username, password} = user;
 
 
-    const userExists = await User.findOne({userId});
+    const userExists = await User.findOne({username});
     if(userExists) throw new Error("User already exists");
 
-    const usernameExists = await User.findOne({username});
-    if(usernameExists) throw new Error("Username already exists");
-
-    const newUser = new User({userId, username, password});
+    const newUser = new User({username, password});
     await newUser.save();
-    return newUser;
+    return {username: newUser.username};
 }

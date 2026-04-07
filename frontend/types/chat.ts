@@ -1,11 +1,12 @@
 export interface ChatMessage {
   id: string;
-  senderId: string;
+  senderUsername: string;
   message: string;
-  timestamp: number;
+  timestamp: Date;
 }
 
 export interface ChatRoomProps {
   roomId: string;
-  otherUserId: string;
+  otherUsername: string;
+  currentUsername: string;
 }

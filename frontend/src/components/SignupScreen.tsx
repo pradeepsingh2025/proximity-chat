@@ -1,14 +1,15 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { styles } from '../../styles/style.ts'
-import { fetchWithAuth, setAccessToken } from '../lib/api.ts'
+import { fetchWithAuth } from '../lib/api.ts'
+import { useAuthStore } from '../store/authStore.ts'
 
 interface SignupScreenProps {
-  onSignup: (username: string) => void
   onSwitchToLogin: () => void
 }
 
-export default function SignupScreen({ onSignup, onSwitchToLogin }: SignupScreenProps) {
+export default function SignupScreen({ onSwitchToLogin }: SignupScreenProps) {
+  const login = useAuthStore(state => state.login);
   const [name, setName] = useState<string>('')
   const [password, setPassword] = useState<string>('')
   const [shake, setShake] = useState<boolean>(false)
@@ -30,8 +31,7 @@ export default function SignupScreen({ onSignup, onSwitchToLogin }: SignupScreen
             method: 'POST',
             body: JSON.stringify({ 
                 username: trimmed, 
-                password: trimmedPass, 
-                userId: window.crypto.randomUUID() 
+                password: trimmedPass
             })
         });
         
@@ -43,8 +43,7 @@ export default function SignupScreen({ onSignup, onSwitchToLogin }: SignupScreen
             return
         }
         
-        setAccessToken(data.accessToken)
-        onSignup(data.user.username)
+        login(data.user.username, data.accessToken)
     } catch(err: any) {
         setError(err.message || 'An error occurred')
     }
