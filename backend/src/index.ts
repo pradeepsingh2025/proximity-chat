@@ -27,6 +27,9 @@ const io = new Server(server, {
     }
 });
 
+app.set('io', io);
+
+
 setupSocket(io);
 
 server.listen(3000, () => {
