@@ -694,7 +694,7 @@ The frontend starts on **http://localhost:5173**.
 | `player:sync_position` | `{ x, y }`                                      | Resume position after reconnect/refresh           |
 | `proximity:connect`    | `{ userId, roomId }`                            | You entered another player's proximity            |
 | `proximity:disconnect` | `{ userId, roomId }`                            | You left another player's proximity               |
-| `chat:message`         | `{ senderId, message }`                         | Incoming chat message in a proximity room         |
+| `chat:message`         | `{ senderUsername, message }`                         | Incoming chat message in a proximity room         |
 
 ---
 
