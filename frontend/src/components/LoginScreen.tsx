@@ -20,7 +20,6 @@ export default function LoginScreen({ onSwitchToSignup }: LoginScreenProps) {
     setError('')
     const trimmed = name.trim()
     const trimmedPass = password.trim()
-    console.log(trimmed, trimmedPass);
     if (!trimmed || !trimmedPass) {
       setShake(true)
       setTimeout(() => setShake(false), 500)

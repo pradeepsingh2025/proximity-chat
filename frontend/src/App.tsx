@@ -28,7 +28,6 @@ export default function App() {
   }
 
   const handleGameReady = useCallback((game: CosmosGame): void => {
-    console.log('PixiJS ready — game instance:', game)
 
     socket.emit('player:join', {
       username,
